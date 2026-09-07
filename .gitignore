@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# test and tooling caches
+coverage/
+.vitest/
+.eslintcache
+
+# local environment
+.env
+.env.local
+
+# editors
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+# PGlite only writes to disk when given a data directory; this is where the
+# optional persistent runs would put it.
+pgdata/

@@ -1,0 +1,30 @@
+{
+  "name": "pg-query-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A reproducible PostgreSQL query-optimization lab: measured before/after evidence for a dozen classic slow-query patterns, running entirely in-process on PGlite.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "bench": "tsx src/bench.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^22.9.0",
+    "eslint": "^9.15.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.15.0",
+    "vitest": "^4.1.11"
+  }
+}
