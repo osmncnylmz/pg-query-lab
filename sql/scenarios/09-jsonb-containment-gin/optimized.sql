@@ -1,4 +1,4 @@
--- Identical query. The GIN index created by setup.sql is what changed.
+-- Same query as naive.sql; setup.sql added the GIN index underneath it.
 SELECT event_type, count(*) AS events
 FROM events
 WHERE payload @> '{"plan": "enterprise", "source": "ios"}'::jsonb

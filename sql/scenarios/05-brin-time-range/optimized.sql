@@ -1,4 +1,4 @@
--- Identical query. The BRIN index created by setup.sql is what changed.
+-- Not one character of this differs from naive.sql. The BRIN index does.
 SELECT event_type,
        count(*)                            AS events,
        round(sum((payload->>'value')::numeric), 2) AS value

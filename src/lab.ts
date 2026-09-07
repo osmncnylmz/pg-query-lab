@@ -33,7 +33,7 @@ export interface TableCount {
   readonly rows: number;
 }
 
-/** A relation as seen by the drift check: name plus kind. */
+/** A relation as the drift check sees it. */
 export interface DatabaseObject {
   readonly name: string;
   readonly kind: string;
@@ -64,8 +64,8 @@ const SEEDED_TABLES = [
  * PGlite is a real PostgreSQL compiled to WebAssembly, so the planner, the
  * executor, the statistics and EXPLAIN output are the genuine article. What it
  * is not is a server: one connection, no background workers, no parallel query.
- * Those limits are documented in the README, and they are the reason the
- * numbers here are ratios first and absolute milliseconds second.
+ * That last one is why the benchmark leads with ratios and treats absolute
+ * milliseconds as supporting detail.
  */
 export class Lab {
   private constructor(
@@ -87,16 +87,14 @@ export class Lab {
     return lab;
   }
 
-  /** Apply a file from sql/ as a single multi-statement script. */
   private async applyScript(file: string, vars: Readonly<Record<string, SqlValue>> = {}): Promise<void> {
     const raw = await readFile(join(SQL_DIR, file), 'utf8');
     await this.db.exec(renderSqlVariables(raw, vars));
   }
 
   /**
-   * Apply a file one statement at a time. Needed for VACUUM, which refuses to
-   * run inside the implicit transaction block that a multi-statement simple
-   * query creates.
+   * One statement per round trip. VACUUM needs this: it refuses to run inside
+   * the implicit transaction block a multi-statement simple query creates.
    */
   private async applyStatementByStatement(file: string): Promise<void> {
     const raw = await readFile(join(SQL_DIR, file), 'utf8');
@@ -114,11 +112,7 @@ export class Lab {
     return counts;
   }
 
-  /**
-   * Everything a scenario could create and forget to drop. Compared before and
-   * after each scenario so that one scenario's index can never silently make
-   * the next scenario's "before" number look good.
-   */
+  /** Everything a scenario could create and forget to drop. */
   async snapshot(): Promise<DatabaseSnapshot> {
     const relations = await this.db.query<DatabaseObject>(`
       SELECT c.relname AS name, c.relkind::text AS kind

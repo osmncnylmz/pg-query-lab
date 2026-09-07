@@ -110,9 +110,8 @@ function parseExpectation(id: string, where: string, value: unknown): PlanExpect
 }
 
 /**
- * Hand-written validation rather than a schema library. It is thirty lines, it
- * keeps the dependency list at one runtime package, and it produces messages
- * that name the file.
+ * Hand-written rather than a schema library, which keeps the runtime dependency
+ * list at one package and lets every message name the file it came from.
  */
 export function parseScenarioMeta(id: string, raw: unknown): ScenarioMeta {
   if (!isRecord(raw)) throw new ScenarioMetaError(id, 'must contain a JSON object');
@@ -224,7 +223,7 @@ export async function loadScenario(id: string, dir: string): Promise<Scenario> {
   };
 }
 
-/** Every scenario directory, in numeric filename order. */
+/** In numeric filename order, which is the order everything reports in. */
 export async function loadScenarios(root: string = SCENARIOS_DIR): Promise<Scenario[]> {
   const entries = await readdir(root);
   const dirs: string[] = [];

@@ -1,11 +1,4 @@
-/**
- * The benchmark runner.
- *
- *   npm run bench                        default scale, writes BENCHMARK.md
- *   npm run bench -- --scale 0.25        a quarter of the rows
- *   npm run bench -- --only 05           just one scenario, no file written
- *   npm run bench -- --check             fail if any scenario stops paying off
- */
+/** The benchmark runner. `npm run bench -- --help` prints the flags. */
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -17,9 +10,9 @@ import { runScenario, type ScenarioRun } from './runner.js';
 import { loadScenarios } from './scenarios.js';
 
 /**
- * The version of PGlite that is actually installed, for the report header.
- * Its package.json is not in the package's `exports` map, so it cannot be
- * `require`d; read it off disk, and fall back to the declared range.
+ * The version of PGlite actually installed, for the report header. Its
+ * package.json is not in the package's `exports` map, so it cannot be required.
+ * Read it off disk instead and fall back to the declared range.
  */
 async function installedPgliteVersion(): Promise<string> {
   const candidates = [

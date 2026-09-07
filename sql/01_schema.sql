@@ -1,24 +1,15 @@
--- ---------------------------------------------------------------------------
--- pg-query-lab :: schema
--- ---------------------------------------------------------------------------
--- A deliberately realistic e-commerce OLTP schema. It is the substrate for the
--- optimization scenarios in sql/scenarios/, so a few of its indexing decisions
--- are intentional omissions rather than oversights. Every such omission is
--- marked with "LAB:" and names the scenario that fixes it.
+-- pg-query-lab: an e-commerce OLTP schema, and the substrate for the scenarios
+-- in sql/scenarios/. A few of its indexing decisions are omissions on purpose;
+-- each one is marked "LAB:" and names the scenario that adds the index back.
 --
--- Conventions used throughout:
+-- House rules:
 --   * money is numeric(12,2), never a floating point type
 --   * every point in time is timestamptz, never timestamp
 --   * NOT NULL is the default posture; nullability has to earn its place
---   * CHECK constraints encode invariants the application must never violate
---   * foreign keys spell out ON DELETE explicitly, per relationship semantics
+--   * CHECK constraints carry invariants the application must never violate
+--   * foreign keys spell out ON DELETE, per relationship
 --
--- Runs on PostgreSQL 14+ (developed against PostgreSQL 18.3 via PGlite).
--- ---------------------------------------------------------------------------
-
--- --------------------------------------------------------------------------
--- Enumerated domains
--- --------------------------------------------------------------------------
+-- PostgreSQL 14 and up. Developed against 18.3 through PGlite.
 
 CREATE TYPE order_status AS ENUM (
     'pending', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded'
@@ -48,10 +39,6 @@ CREATE DOMAIN currency_code AS char(3)
 
 CREATE DOMAIN money_amount AS numeric(12, 2);
 
--- --------------------------------------------------------------------------
--- customers
--- --------------------------------------------------------------------------
-
 CREATE TABLE customers (
     id            bigint        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     email         text          NOT NULL,
@@ -69,10 +56,6 @@ CREATE TABLE customers (
 
 CREATE UNIQUE INDEX customers_email_uq ON customers (email);
 CREATE INDEX customers_created_at_idx ON customers (created_at);
-
--- --------------------------------------------------------------------------
--- addresses
--- --------------------------------------------------------------------------
 
 CREATE TABLE addresses (
     id           bigint       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -98,10 +81,7 @@ CREATE UNIQUE INDEX addresses_one_default_per_kind_uq
     ON addresses (customer_id, kind)
     WHERE is_default;
 
--- --------------------------------------------------------------------------
--- categories (self-referencing tree)
--- --------------------------------------------------------------------------
-
+-- A self-referencing tree, three levels deep in the seeded data.
 CREATE TABLE categories (
     id         bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     parent_id  bigint      REFERENCES categories (id) ON DELETE RESTRICT,
@@ -119,10 +99,6 @@ CREATE TABLE categories (
 
 CREATE UNIQUE INDEX categories_slug_uq ON categories (slug);
 CREATE INDEX categories_parent_id_idx ON categories (parent_id);
-
--- --------------------------------------------------------------------------
--- products
--- --------------------------------------------------------------------------
 
 CREATE TABLE products (
     id           bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -149,10 +125,6 @@ CREATE TABLE products (
 CREATE UNIQUE INDEX products_sku_uq ON products (sku);
 CREATE INDEX products_category_id_idx ON products (category_id);
 
--- --------------------------------------------------------------------------
--- product_variants
--- --------------------------------------------------------------------------
-
 CREATE TABLE product_variants (
     id            bigint       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     product_id    bigint       NOT NULL REFERENCES products (id) ON DELETE CASCADE,
@@ -169,10 +141,6 @@ CREATE TABLE product_variants (
 
 CREATE UNIQUE INDEX product_variants_sku_uq ON product_variants (sku);
 CREATE INDEX product_variants_product_id_idx ON product_variants (product_id);
-
--- --------------------------------------------------------------------------
--- inventory_movements
--- --------------------------------------------------------------------------
 
 CREATE TABLE inventory_movements (
     id          bigint          GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -194,10 +162,6 @@ CREATE TABLE inventory_movements (
 CREATE INDEX inventory_movements_variant_occurred_idx
     ON inventory_movements (variant_id, occurred_at DESC);
 
--- --------------------------------------------------------------------------
--- orders
--- --------------------------------------------------------------------------
-
 CREATE TABLE orders (
     id               bigint        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     customer_id      bigint        NOT NULL REFERENCES customers (id) ON DELETE RESTRICT,
@@ -209,8 +173,9 @@ CREATE TABLE orders (
     placed_at        timestamptz   NOT NULL,
     shipped_at       timestamptz,
 
-    -- STORED generated column: the invoice total can never drift away from the
-    -- components it is made of, and it can be indexed (scenario 11).
+    -- The invoice total can never drift away from the components it is made
+    -- of, and because it is stored rather than virtual it can be indexed
+    -- (scenario 11).
     total_amount     money_amount
         GENERATED ALWAYS AS (subtotal + shipping_fee - discount_amount) STORED,
 
@@ -233,10 +198,6 @@ CREATE INDEX orders_customer_placed_idx ON orders (customer_id, placed_at DESC);
 -- (placed_at) alone, and on (total_amount). Scenarios 02, 06, 11 and 12 add
 -- and measure them.
 
--- --------------------------------------------------------------------------
--- order_items
--- --------------------------------------------------------------------------
-
 CREATE TABLE order_items (
     id          bigint       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     order_id    bigint       NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
@@ -245,8 +206,8 @@ CREATE TABLE order_items (
     unit_price  money_amount NOT NULL,
     discount    money_amount NOT NULL DEFAULT 0,
 
-    -- STORED generated column: line_total is derived, so it is not writable and
-    -- cannot be inconsistent with its inputs.
+    -- Derived, so it is not writable and cannot go out of step with quantity,
+    -- unit_price and discount.
     line_total  money_amount
         GENERATED ALWAYS AS (quantity * unit_price - discount) STORED,
 
@@ -263,10 +224,6 @@ CREATE TABLE order_items (
 -- exists to demonstrate.
 CREATE INDEX order_items_variant_id_idx ON order_items (variant_id);
 
--- --------------------------------------------------------------------------
--- payments
--- --------------------------------------------------------------------------
-
 CREATE TABLE payments (
     id            bigint         GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     order_id      bigint         NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
@@ -281,10 +238,6 @@ CREATE TABLE payments (
 
 CREATE UNIQUE INDEX payments_external_ref_uq ON payments (external_ref);
 CREATE INDEX payments_order_id_idx ON payments (order_id);
-
--- --------------------------------------------------------------------------
--- reviews
--- --------------------------------------------------------------------------
 
 CREATE TABLE reviews (
     id          bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -302,10 +255,6 @@ CREATE TABLE reviews (
 -- One review per customer per product.
 CREATE UNIQUE INDEX reviews_product_customer_uq ON reviews (product_id, customer_id);
 CREATE INDEX reviews_customer_id_idx ON reviews (customer_id);
-
--- --------------------------------------------------------------------------
--- events (append-only log)
--- --------------------------------------------------------------------------
 
 CREATE TABLE events (
     id           bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

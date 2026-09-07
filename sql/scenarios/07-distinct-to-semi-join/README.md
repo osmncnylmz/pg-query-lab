@@ -32,12 +32,11 @@ its NULL semantics are unsurprising -- `NOT IN` against a subquery that can
 produce a NULL returns no rows at all, which is one of the great silent
 data-loss bugs in SQL, and `NOT EXISTS` has no such trap.
 
-## When DISTINCT is the right tool
-
-When you actually want the distinct values of something, rather than the rows of
-one table filtered by the existence of another. The tell for this antipattern is
-that every column in the `SELECT DISTINCT` list comes from the same table, and
-the other table appears nowhere in the output.
+`DISTINCT` is the right tool when you genuinely want the distinct values of
+something, rather than the rows of one table filtered by the existence of
+another. The tell for the antipattern is that every column in the
+`SELECT DISTINCT` list comes from the same table, and the other table appears
+nowhere in the output.
 
 ## What to look for in the plan
 
@@ -58,6 +57,6 @@ Nested Loop Semi Join  (rows=650)
   -> Index Only Scan on events  (rows=1 loops=650)
 ```
 
-Two things to read: the join node says `Semi`, and the inner scan now reports
-`rows=1` per loop instead of a hundred. That `rows=1` is the semi-join stopping
-early, and it is the entire optimization.
+The join node says `Semi`, and the inner scan now reports `rows=1` per loop
+instead of a hundred. That `rows=1` is the semi-join stopping at the first
+match, and it is the entire optimization.

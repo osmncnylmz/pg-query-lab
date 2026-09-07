@@ -9,7 +9,7 @@ against every row, and evaluating it means walking the binary jsonb
 representation of each document. 300,000 documents later, 0.5% of them matched.
 
 B-tree cannot help: there is no total order on jsonb documents that makes
-containment a range query. This is what GIN -- Generalised Inverted Index -- is
+containment a range query. This is what GIN, the Generalised Inverted Index, is
 for. It maps *pieces of a value* back to the rows that contain them, the same
 way a book index maps words to pages.
 
@@ -21,7 +21,8 @@ CREATE INDEX events_payload_gin ON events USING gin (payload jsonb_path_ops);
 
 ## Choosing the opclass
 
-`jsonb` has two GIN opclasses and the default is not usually the one you want:
+`jsonb` has two GIN opclasses, and for containment queries you usually want the
+one that is not the default:
 
 | | `jsonb_ops` (default) | `jsonb_path_ops` |
 | --- | --- | --- |

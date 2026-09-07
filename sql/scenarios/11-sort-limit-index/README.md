@@ -5,10 +5,9 @@
 ## What is slow
 
 `ORDER BY ... LIMIT 50` over an unindexed ordering has to look at every row.
-PostgreSQL is clever about it -- it uses a bounded "top-N heapsort" that keeps
-only 50 rows in memory rather than sorting all 100,000 -- but it still reads the
-whole table, and the sort is on the critical path before the first row can be
-returned.
+PostgreSQL is clever about it: a bounded "top-N heapsort" keeps only 50 rows in
+memory instead of sorting all 100,000. It still reads the whole table though,
+and the sort sits on the critical path before the first row can be returned.
 
 ## The fix
 
@@ -38,16 +37,16 @@ traversal of that index that produces it, so the planner sorts.
 `CREATE INDEX ... (total_amount DESC, id ASC)` stores the mixed order directly,
 and the sort disappears.
 
-Mixed-direction sort keys are not exotic. Any "biggest first, oldest first among
-ties" list is one, and so is any "newest first, alphabetical among ties".
+Mixed-direction sort keys turn up constantly. Any "biggest first, oldest first
+among ties" list is one, and so is any "newest first, alphabetical among ties".
 
 ## `NULLS FIRST` / `NULLS LAST`
 
 The same trap applies one level down. `DESC` implies `NULLS FIRST` and `ASC`
 implies `NULLS LAST`; if the query overrides that, the index has to as well.
-`total_amount` here is `NOT NULL` -- being a generated column over `NOT NULL`
-inputs -- so it does not arise, but on a nullable column it is the next thing to
-check when the sort refuses to go away.
+`total_amount` here is a generated column over `NOT NULL` inputs, so it is
+`NOT NULL` too and the question never comes up. On a nullable column it is the
+next thing to check when the sort refuses to go away.
 
 ## What to look for in the plan
 

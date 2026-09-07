@@ -38,15 +38,17 @@ themselves take a few more.
 | [12](sql/scenarios/12-partial-index/) | Selective predicate on a skewed column | Partial index | 6.07 ms | 0.90 ms | **6.7x** |
 | [13](sql/scenarios/13-full-text-search/) | Full-text search computed per row | Stored generated tsvector column with a GIN index | 231 ms | 0.34 ms | **688x** |
 
-Those milliseconds came from one machine — an Apple M4 under Node 25, at the
-default scale of roughly 940,000 rows — and they will not reproduce on yours.
-Absolute timings are a property of the hardware, the page cache and the WASM
-runtime, and they belong to the run that produced this table rather than to the
-technique. The ratios are the part that travels. Even those are not stable to
-three digits. Back-to-back runs on this machine moved several scenarios by a
-third, and the ones whose optimized side lands under a millisecond move most,
-because at that size the measurement is competing with its own overhead. Read
-the column as an order of magnitude.
+Those milliseconds came off one machine -- an Apple M4 under Node 25, at the
+default scale of roughly 940,000 rows -- and they will not reproduce on yours.
+Absolute timings belong to the hardware, the page cache and the WASM runtime,
+which is to say they belong to the run that produced them rather than to the
+technique. The ratios are the part that travels.
+
+Even those are not stable to three digits. Back-to-back runs on this machine
+moved several scenarios by a third, and the ones whose optimized side lands
+under a millisecond move most, because at that size the measurement is
+competing with its own overhead. Read the speedup column as an order of
+magnitude.
 
 [BENCHMARK.md](BENCHMARK.md) is the full output of the run above: per-scenario
 buffer counts, the indexes each plan actually used, the size on disk of
@@ -61,39 +63,39 @@ work at all" looks like, not a claim about full-text search in general.
 
 ## How the harness avoids fooling itself
 
-A before/after benchmark is trivially easy to rig, usually by accident. Four
-things guard against it.
+A before/after benchmark is easy to rig, and it usually gets rigged by accident.
 
-**Both queries must return the same rows.** Every scenario's two result sets are
-compared as multisets — or as sequences, where the queries carry an `ORDER BY`
-and row order is part of the answer. Numeric values are normalised first, since
-`4.50` from a `numeric(12,2)` column and `4.5` from an aggregate are the same
-number arriving with different scale. A scenario whose "optimization" quietly
-drops a row fails the run instead of posting a good time. This catches the
-classic mistakes: a `LEFT JOIN` rewritten as an inner join, a `NOT IN` that
-swallows a NULL, a `LIMIT` whose `ORDER BY` lost its tiebreaker.
+Start with the rows. Every scenario's two result sets are compared as multisets,
+or as sequences where the queries carry an `ORDER BY` and row order is part of
+the answer. Numeric values are normalised first: `4.50` from a `numeric(12,2)`
+column and `4.5` from an aggregate over it are the same number arriving at a
+different scale. A scenario whose "optimization" quietly drops a row fails the
+run instead of posting a good time, which is what catches the classic mistakes.
+A `LEFT JOIN` rewritten as an inner join. A `NOT IN` that swallows a NULL. A
+`LIMIT` whose `ORDER BY` lost its tiebreaker.
 
-**The DDL is applied at the honest moment.** Each scenario declares in its
-`meta.json` when its setup runs. `before-optimized` means the fix *is* the
-index, so the naive query is measured before that index exists — measuring it
-afterwards would measure nothing. `before-both` means the fix is a rewrite, so
-both queries see the same indexes; otherwise the comparison is between an
-indexed query and an unindexed one rather than between two ways of asking the
-same question. `none` is a pure rewrite against the schema as shipped.
+Then the moment the DDL lands, which each scenario declares in its `meta.json`.
+`before-optimized` means the fix *is* the index, so the naive query is measured
+while that index still does not exist; measuring it afterwards would measure
+nothing. `before-both` means the fix is a rewrite, so both queries see the same
+indexes. Otherwise the comparison is between an indexed query and an unindexed
+one rather than between two ways of asking the same question. `none` is a pure
+rewrite against the schema as shipped.
 
-**Nothing leaks between scenarios.** The runner snapshots every relation and
-extension in `public` before a scenario, runs it, applies its `teardown.sql`,
-and diffs the snapshot again. A leftover index would silently improve the next
-scenario's "before" number, so a scenario that fails to clean up fails the run.
+Nothing is allowed to leak between scenarios. The runner snapshots every
+relation and extension in `public` beforehand, runs the scenario, applies its
+`teardown.sql`, and diffs the snapshot again. A leftover index would quietly
+improve the next scenario's "before" number, so a scenario that fails to clean
+up fails the run.
 
-**The plans are asserted, not just the times.** A speedup that came from a warm
-cache rather than from the technique under test is a real hazard. Each
-`meta.json` states what must appear in each plan and what must not: scenario 05
-requires a `Bitmap Index Scan` on `events_occurred_at_brin` and forbids a
-`Seq Scan` on `events`, and so on. The test suite checks those assertions on
-every scenario at a smaller scale, and prints the offending plan when one fails.
+Last, the plans are asserted and not only the times, because a speedup that came
+from a warm cache rather than from the technique under test is a real hazard.
+Each `meta.json` states what has to appear in a plan and what must not: scenario
+05 requires a `Bitmap Index Scan` on `events_occurred_at_brin` and forbids a
+`Seq Scan` on `events`. The suite checks every scenario's assertions at a
+smaller scale and prints the offending plan when one fails.
 
-The test suite also checks the schema itself: three dozen cases covering the
+Beyond the scenarios it also covers the schema, in three dozen cases over the
 `CHECK` constraints, the `ON DELETE` behaviour of each foreign key, the
 generated columns, the append-only trigger on `events`, and the claim that
 seeding is deterministic.
@@ -104,14 +106,14 @@ An e-commerce OLTP schema in [`sql/01_schema.sql`](sql/01_schema.sql): customers
 addresses, a category tree, products and variants, orders and lines, payments,
 reviews, and an append-only event log. Money is `numeric(12,2)`, times are
 `timestamptz`, `NOT NULL` is the default posture, and constraints carry the
-invariants. Several indexes are missing on purpose; each omission is commented
-where it would otherwise sit, and names the scenario that adds it.
+invariants. Several indexes are missing on purpose -- each omission is
+commented where it would otherwise sit, and names the scenario that adds it.
 
 [`sql/02_seed.sql`](sql/02_seed.sql) fills it, entirely server-side, from
 `generate_series`. It takes `:scale` and `:seed`. The usual `setseed()` +
 `random()` recipe is not what the data depends on, because `random()` is only
 reproducible if every call happens in the same order, and evaluation order is a
-property of the plan rather than of the query — add a parallel worker and your
+property of the plan rather than of the query. Add a parallel worker and your
 "seeded" generator quietly produces something else. Every value here is instead
 a pure function of row number and salt, so the same `(scale, seed)` gives
 identical data under any plan. At scale 1 that is about 940,000 rows.
@@ -140,7 +142,7 @@ The `.sql` files use psql-style `:name` variables, so the same files feed both
 `psql` and the TypeScript runner without maintaining two dialects. Substitution
 is done by a small scanner in [`src/sql-text.ts`](src/sql-text.ts) that
 understands string literals, dollar quoting, quoted identifiers and nested block
-comments — a regex would happily rewrite `:session` inside a string, or read
+comments. A regex would happily rewrite `:session` inside a string, or read
 `::text` as a cast of a variable named `text`.
 
 `params.sql` exists for values a real application already has and should not pay
@@ -167,9 +169,9 @@ startup as a separate WASM bundle, which `src/lab.ts` does.
 
 What PGlite is not is a server. One connection, no background workers, and no
 parallel query. A server with several workers would cut the naive times in the
-sequential-scan scenarios by roughly the number of workers it chose to use,
-which compresses those ratios; it does not change which query has to read the
-whole table and which one does not. This is the main reason the ratios are
+sequential-scan scenarios -- roughly by the number of workers it chose to
+use -- which compresses those ratios; it does not change which query has to read
+the whole table and which one does not. This is the main reason the ratios are
 presented as the headline and the milliseconds as supporting detail.
 
 ## Benchmark runner options

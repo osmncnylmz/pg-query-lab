@@ -2,8 +2,8 @@ import type { PGlite } from '@electric-sql/pglite';
 
 /**
  * A node of a PostgreSQL `EXPLAIN (FORMAT JSON)` plan. Only the fields this
- * project reads are named; the rest are left as an index signature because the
- * shape varies by node type and PostgreSQL version.
+ * project reads are named. The rest are an index signature because the shape
+ * varies by node type and by PostgreSQL version.
  */
 export interface PlanNode {
   readonly 'Node Type': string;
@@ -18,7 +18,6 @@ export interface ExplainOutput {
   readonly [key: string]: unknown;
 }
 
-/** Run EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) and return the parsed plan. */
 export async function explainAnalyze(db: PGlite, sql: string): Promise<ExplainOutput> {
   const res = await db.query<Record<string, unknown>>(
     `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`,
@@ -30,8 +29,8 @@ export async function explainAnalyze(db: PGlite, sql: string): Promise<ExplainOu
   return raw[0] as ExplainOutput;
 }
 
-/** Depth-first list of every node in the plan, root first. */
-export function planNodes(root: PlanNode): PlanNode[] {
+/** Depth-first, root first. Callers rely on the order. */
+function planNodes(root: PlanNode): PlanNode[] {
   const out: PlanNode[] = [];
   const visit = (node: PlanNode): void => {
     out.push(node);
@@ -42,13 +41,12 @@ export function planNodes(root: PlanNode): PlanNode[] {
 }
 
 /**
- * How a test or a scenario names the plan node it expects.
+ * How a test or a scenario names the plan node it expects. A bare string is
+ * shorthand for `{ node: '<string>' }`.
  *
- * A bare string is shorthand for `{ node: '<string>' }`. Node type matching is
- * a prefix match on purpose: "Index Scan" should also accept
- * "Index Scan Backward". Note that "Index Scan" does NOT match
- * "Index Only Scan", which is the distinction most of these assertions care
- * about.
+ * Node type matching is a prefix match so that "Index Scan" also accepts
+ * "Index Scan Backward". It does NOT match "Index Only Scan" -- which is the
+ * distinction most of these assertions turn on.
  */
 export interface NodeMatcher {
   readonly node?: string;
@@ -64,7 +62,7 @@ export interface NodeMatcher {
   readonly parentRelationship?: string;
 }
 
-export function normaliseMatcher(m: string | NodeMatcher): NodeMatcher {
+function normaliseMatcher(m: string | NodeMatcher): NodeMatcher {
   return typeof m === 'string' ? { node: m } : m;
 }
 
@@ -78,7 +76,7 @@ export function describeMatcher(m: string | NodeMatcher): string {
   return parts.join(' ');
 }
 
-export function matchesNode(node: PlanNode, matcher: string | NodeMatcher): boolean {
+function matchesNode(node: PlanNode, matcher: string | NodeMatcher): boolean {
   const m = normaliseMatcher(matcher);
   if (m.node !== undefined && !node['Node Type'].startsWith(m.node)) return false;
   if (m.relation !== undefined && node['Relation Name'] !== m.relation) return false;
@@ -95,10 +93,6 @@ export function matchesNode(node: PlanNode, matcher: string | NodeMatcher): bool
 
 export function findNodes(root: PlanNode, matcher: string | NodeMatcher): PlanNode[] {
   return planNodes(root).filter((n) => matchesNode(n, matcher));
-}
-
-export function hasNode(root: PlanNode, matcher: string | NodeMatcher): boolean {
-  return findNodes(root, matcher).length > 0;
 }
 
 /** Every index the plan actually reads, in plan order, de-duplicated. */
@@ -123,8 +117,8 @@ function numeric(node: PlanNode, key: string): number | undefined {
   return typeof v === 'number' ? v : undefined;
 }
 
-/** One line describing a plan node, in roughly the shape EXPLAIN prints. */
-export function formatNode(node: PlanNode): string {
+/** Roughly the line EXPLAIN's text format would print for this node. */
+function formatNode(node: PlanNode): string {
   const bits: string[] = [];
 
   const subplanName = node['Subplan Name'];
@@ -160,7 +154,6 @@ export function formatNode(node: PlanNode): string {
   return `${bits.join(' ')}${detail.length > 0 ? `  (${detail.join(' ')})` : ''}`;
 }
 
-/** The whole plan as an indented tree, the way EXPLAIN's text format reads. */
 export function formatPlan(explain: ExplainOutput): string {
   const lines: string[] = [];
   const visit = (node: PlanNode, depth: number): void => {

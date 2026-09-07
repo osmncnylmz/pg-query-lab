@@ -29,19 +29,22 @@ WHERE c.email = '...'
   AND NOT (status = 'refunded' AND placed_at >= '2025-10-01')
 ```
 
-Now each arm is a single-table restriction that an index can satisfy.
+Now each arm is a restriction on one table, which an index can satisfy. The join
+to `customers` is gone from the first arm because it was a no-op there:
+`orders.customer_id` is a `NOT NULL` foreign key, so the inner join matched
+exactly one row and could not change the result.
 
-Two details matter:
+What the rewrite has to get right:
 
-* **`UNION ALL`, not `UNION`.** `UNION` deduplicates, which means sorting the
-  entire result -- often more expensive than the scan you just eliminated.
-* **The arms must be disjoint.** An order that is both a recent refund *and*
-  belongs to that customer would otherwise appear twice, where the `OR`
-  returned it once. The `NOT (...)` in the second arm is what makes the rewrite
-  correct, and it has to negate the entire first arm, not just the part that
-  looks like the interesting one. This is exactly the sort of thing that gets
-  left out. The harness compares both result sets row by row; without that
-  predicate this scenario fails rather than reporting a speedup.
+* `UNION ALL`, not `UNION`. `UNION` deduplicates, which means sorting the entire
+  result -- often more expensive than the scan you just eliminated.
+* The arms have to be disjoint. An order that is both a recent refund *and*
+  belongs to that customer would otherwise appear twice, where the `OR` returned
+  it once. The `NOT (...)` in the second arm is what makes the rewrite correct,
+  and it has to negate the entire first arm, not just the part that looks like
+  the interesting one. This is exactly the sort of thing that gets left out. The
+  harness compares both result sets row by row; without that predicate this
+  scenario fails rather than reporting a speedup.
 
 ## What to look for in the plan
 

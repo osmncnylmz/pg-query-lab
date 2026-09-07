@@ -20,16 +20,16 @@ CREATE INDEX orders_pending_idx
 The `WHERE` clause makes this a *partial* index: it contains entries only for
 rows that satisfy it. The other 98% of the table is simply not in it.
 
-Two consequences, and the second is the one that matters in production:
+The size follows directly: this index is roughly 2% of what a full index on the
+same columns would be. Both are measured for this dataset and reported in
+`BENCHMARK.md`.
 
-* **Size.** The index is roughly 2% of what a full index on the same columns
-  would be. Both are measured for this dataset and reported in `BENCHMARK.md`.
-* **Write cost.** An index has to be maintained by every write that touches it.
-  A partial index is only maintained for rows that match its predicate -- and
-  crucially, a row that *leaves* the predicate is removed from it. Orders move
-  from `pending` to `paid` and stop costing anything to maintain. The index does
-  not grow with the table, it grows with the size of the backlog, which is
-  bounded by how fast the business ships.
+The write cost is the part that matters more in production. Any write touching
+an indexed row has to maintain the index, but a partial index is maintained only
+for rows that match its predicate, and a row that *leaves* the predicate is
+removed from it. Orders move from `pending` to `paid` and stop costing anything.
+So the index does not grow with the table. It grows with the backlog, which is
+bounded by how fast the business ships.
 
 ## `status` is not in the key
 
@@ -71,27 +71,28 @@ Sort  (Sort Method: quicksort)
     -> Bitmap Index Scan using orders_pending_idx  (rows=284)
 ```
 
-Two things are worth noticing, and the second is the more interesting one.
-
 The scan now emits 284 rows instead of reading 100,000 and discarding 99,716.
 That is the whole win, and it is visible in the `buffers` column of
 `BENCHMARK.md` as well as in the time.
 
-But the `Sort` is still there. The index *could* have delivered the rows in
-order -- its key is exactly the `ORDER BY` -- and the planner chose not to use
-it that way. A plain index scan walks the index and follows each entry to a
-random heap page; a bitmap scan collects all the matching entries first, sorts
-them by page, and then reads the heap in physical order. For a few hundred rows
-scattered across a table, reading the heap sequentially and sorting the result
-afterwards is cheaper than several hundred random accesses, and the planner
-costs it that way.
+But the `Sort` is still there. Its key is exactly the `ORDER BY`, so the index
+could have delivered the rows in order, and the planner chose not to use it that
+way. A plain index scan walks the index and follows each entry to a random heap
+page; a bitmap scan collects all the matching entries first, sorts them by page,
+and then reads the heap in physical order. For a few hundred rows scattered
+across a table, reading the heap sequentially and sorting the result afterwards
+is cheaper than several hundred random accesses, and the planner costs it that
+way.
 
-This is worth internalising: "the index provides the ordering" is a possibility
-the planner weighs, not a promise it makes. Scenario 11 is the case where it
-takes the offer -- because a `LIMIT 50` means it can stop early, and stopping
-early is something a bitmap scan cannot do.
+"The index provides the ordering" is therefore an option the planner weighs and
+is free to decline. Scenario 11 is where it takes the offer, because a
+`LIMIT 50` means it can stop early -- and stopping early is the one thing a
+bitmap scan cannot do.
 
 ## Related
 
-Scenario 05 is the other way to make an index much smaller than the table it
-covers: BRIN summarises page ranges instead of refusing to store rows.
+BRIN (scenario 05) also ends up far smaller than its table, but it gets there by
+trusting the physical order of the heap rather than by dropping rows. The
+failure modes differ accordingly. A partial index the planner cannot prove
+applies simply goes unused; a BRIN index on a scattered column gets used and
+hands back the whole table anyway.

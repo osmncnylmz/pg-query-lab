@@ -1,15 +1,13 @@
 /**
- * Order-insensitive result set comparison.
+ * The premise of this repository is "same answer, less work". A rewrite that
+ * quietly returns different rows is a bug, and a cheap one to ship; the README
+ * lists the usual ways it happens. This module is what keeps one of them from
+ * being reported as a speedup, so no scenario's timings are believed until its
+ * two result sets have been through here.
  *
- * The premise of this repository is "same answer, less work". An optimization
- * that quietly returns different rows is not an optimization, it is a bug, and
- * it is an easy one to ship: rewrite a LEFT JOIN as an inner join, forget the
- * tiebreaker in an ORDER BY ... LIMIT, lose a NULL to a NOT IN. Every scenario
- * is therefore checked here before any of its timings are believed.
- *
- * Rows are compared as a multiset, so a plan that returns the same rows in a
- * different physical order still passes. Scenarios whose queries specify an
- * ORDER BY set `orderedResults`, and then sequence matters too.
+ * Rows compare as a multiset -- same rows in a different physical order still
+ * passes. Scenarios whose queries carry an ORDER BY set `orderedResults`, and
+ * then sequence counts too.
  */
 
 export interface ResultSet {
@@ -34,14 +32,14 @@ function normaliseDecimal(text: string): string {
 }
 
 /**
- * Canonical form of one value.
- *
  * PostgreSQL's numeric arrives as a string so precision is not lost, and the
- * same value can legitimately arrive with a different scale from two different
- * queries (`4.50` from a stored numeric(12,2) column, `4.5` from an aggregate).
- * Comparing those as text would report a difference that does not exist, so
- * numeric-looking strings are normalised. Everything else is compared exactly,
- * with a type tag so that the string "5" is never equal to the number 5.
+ * same value can legitimately turn up at a different scale from two queries:
+ * `4.50` from a stored numeric(12,2) column, `4.5` from an aggregate over it.
+ * Compared as text those differ, and the difference is not real, so
+ * numeric-looking strings are normalised.
+ *
+ * Everything else compares exactly, carrying a type tag so the string "5" is
+ * never equal to the number 5.
  */
 function canonicalValue(value: unknown): unknown {
   if (value === undefined || value === null) return null;

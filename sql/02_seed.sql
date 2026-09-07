@@ -1,35 +1,25 @@
--- ---------------------------------------------------------------------------
--- pg-query-lab :: seed
--- ---------------------------------------------------------------------------
--- Pure SQL. No client-side row generation, no COPY from a fixture file: every
--- row is produced by generate_series inside the server.
+-- pg-query-lab: the seed. Pure SQL -- no client-side row generation, no COPY
+-- from a fixture file. Every row comes out of generate_series inside the server.
 --
--- Parameters (psql variables -- the TypeScript runner binds the same names):
+-- Two psql variables, which the TypeScript runner binds under the same names:
 --   :scale   row-count multiplier, 1 = the default dataset
 --   :seed    integer that salts the pseudo-random stream
 --
 --   psql -v scale=1 -v seed=20260101 -f sql/02_seed.sql
 --   npm run bench -- --scale 1 --seed 20260101
 --
--- Determinism
--- -----------
--- setseed() + random() is the usual recipe, and it is called below so that any
--- stray random() would be reproducible. It is NOT what the data depends on,
--- because random() is only deterministic if every call happens in the same
--- order -- and evaluation order is a property of the plan, not of the query.
--- Add a parallel worker or change a join order and the "seeded" generator
--- quietly produces different data.
+-- On determinism. setseed() + random() is the usual recipe and it is called
+-- below, so a stray random() would at least be reproducible, but it is not what
+-- the data depends on. random() is deterministic only if every call happens in
+-- the same order, and evaluation order belongs to the plan rather than to the
+-- query: add a parallel worker or change a join order and the "seeded"
+-- generator quietly produces something else.
 --
--- Instead every value is a pure function of (row number, salt) via lab_rand().
--- Evaluation order cannot matter, so the same (scale, seed) yields identical
--- data on any machine, under any plan.
--- ---------------------------------------------------------------------------
+-- So every value here is a pure function of (row number, salt) via lab_rand().
+-- Order cannot matter, and the same (scale, seed) gives identical data on any
+-- machine under any plan.
 
 SELECT setseed(0.42);
-
--- --------------------------------------------------------------------------
--- Seeding toolkit
--- --------------------------------------------------------------------------
 
 CREATE TABLE lab_seed_config (
     only_row boolean PRIMARY KEY DEFAULT true CHECK (only_row),
@@ -98,10 +88,7 @@ CREATE FUNCTION lab_skewed(n integer, row_n bigint, salt integer, exponent doubl
     RETURNS integer LANGUAGE sql IMMUTABLE PARALLEL SAFE
 RETURN 1 + least(n - 1, floor(power(lab_rand(row_n, salt), exponent) * n)::int);
 
--- --------------------------------------------------------------------------
--- categories: a three-level tree, 6 roots -> 24 -> 72 leaves
--- --------------------------------------------------------------------------
-
+-- categories: 6 roots -> 24 -> 72 leaves.
 INSERT INTO categories (parent_id, slug, name, depth)
 SELECT NULL, 'root-' || g,
        (ARRAY['Outdoor', 'Home', 'Audio', 'Workshop', 'Kitchen', 'Cycling'])[g], 0
@@ -114,10 +101,6 @@ FROM generate_series(1, 24) g;
 INSERT INTO categories (parent_id, slug, name, depth)
 SELECT 7 + ((g - 1) % 24), 'leaf-' || g, 'Leaf ' || g, 2
 FROM generate_series(1, 72) g;
-
--- --------------------------------------------------------------------------
--- customers
--- --------------------------------------------------------------------------
 
 INSERT INTO customers (email, full_name, country, loyalty_tier, is_active, created_at)
 SELECT
@@ -140,11 +123,8 @@ SELECT
     lab_epoch() - make_interval(secs => (lab_rand(g, 7) * 126144000)::int)
 FROM generate_series(1, lab_n(20000)) g;
 
--- --------------------------------------------------------------------------
--- addresses: every customer gets a default shipping address, some also get a
--- billing address and a secondary shipping address.
--- --------------------------------------------------------------------------
-
+-- Every customer gets a default shipping address; some also get a billing
+-- address and a second shipping address.
 INSERT INTO addresses (customer_id, kind, line1, city, postal_code, country, is_default, created_at)
 SELECT
     c.id,
@@ -170,10 +150,7 @@ WHERE k.slot = 0
    OR (k.slot = 1 AND (c.id % 20) < 11)
    OR (k.slot = 2 AND (c.id % 20) < 4);
 
--- --------------------------------------------------------------------------
--- products: long tail across the 72 leaf categories
--- --------------------------------------------------------------------------
-
+-- A long tail across the 72 leaf categories.
 INSERT INTO products (category_id, sku, name, description, is_active, created_at)
 SELECT
     30 + lab_skewed(72, g, 20, 1.8),
@@ -211,10 +188,7 @@ SELECT
     lab_epoch() - make_interval(secs => (lab_rand(g, 28) * 94608000)::int)
 FROM generate_series(1, lab_n(20000)) g;
 
--- --------------------------------------------------------------------------
--- product_variants: 1-3 per product
--- --------------------------------------------------------------------------
-
+-- One to three variants per product.
 INSERT INTO product_variants (product_id, sku, price, weight_grams, attributes, is_active)
 SELECT
     p.id,
@@ -232,14 +206,9 @@ WHERE v.slot = 0
    OR (v.slot = 1 AND (p.id % 20) < 12)
    OR (v.slot = 2 AND (p.id % 20) < 5);
 
--- --------------------------------------------------------------------------
--- orders
--- --------------------------------------------------------------------------
 -- subtotal starts at zero and is reconciled from order_items further down, so
--- that sum(order_items.line_total) = orders.subtotal genuinely holds in the
--- seeded data rather than being approximately true.
--- --------------------------------------------------------------------------
-
+-- that sum(order_items.line_total) = orders.subtotal actually holds in the
+-- seeded data instead of being approximately true.
 INSERT INTO orders (customer_id, status, currency, subtotal, shipping_fee, discount_amount,
                     placed_at, shipped_at)
 SELECT
@@ -261,10 +230,7 @@ CROSS JOIN LATERAL (
             secs => (power(lab_rand(g, 42), 2.0) * 63072000)::int) AS placed_at
 ) s;
 
--- --------------------------------------------------------------------------
--- order_items: 1-3 lines per order
--- --------------------------------------------------------------------------
-
+-- One to three lines per order.
 INSERT INTO order_items (order_id, variant_id, quantity, unit_price, discount)
 SELECT
     x.order_id,
@@ -300,10 +266,7 @@ FROM (
 ) t
 WHERE t.order_id = o.id;
 
--- --------------------------------------------------------------------------
--- payments: one per order that got as far as being paid
--- --------------------------------------------------------------------------
-
+-- One payment per order that got as far as being paid.
 INSERT INTO payments (order_id, method, status, amount, external_ref, processed_at)
 SELECT
     o.id,
@@ -316,14 +279,9 @@ FROM orders o
 WHERE o.status IN ('paid', 'shipped', 'delivered', 'refunded')
   AND o.total_amount > 0;
 
--- --------------------------------------------------------------------------
--- reviews
--- --------------------------------------------------------------------------
 -- Collision-free by construction: product p gets one review per "pass" k, and
 -- the reviewer for (p, k) is offset by a fixed stride, so the
 -- UNIQUE (product_id, customer_id) index can never fire during seeding.
--- --------------------------------------------------------------------------
-
 INSERT INTO reviews (product_id, customer_id, rating, title, body, created_at)
 SELECT
     p.product_id,
@@ -358,10 +316,6 @@ FROM (
 ) p
 JOIN products pr ON pr.id = p.product_id;
 
--- --------------------------------------------------------------------------
--- inventory_movements
--- --------------------------------------------------------------------------
-
 INSERT INTO inventory_movements (variant_id, delta, reason, occurred_at)
 SELECT
     lab_skewed((SELECT count(*) FROM product_variants)::int, g, 80, 2.2),
@@ -380,15 +334,10 @@ CROSS JOIN LATERAL (
                         ARRAY[0.62, 0.82, 0.92, 0.97], g, 85)::movement_reason AS reason
 ) r;
 
--- --------------------------------------------------------------------------
--- events: append-only, physically ordered by occurred_at
--- --------------------------------------------------------------------------
--- occurred_at increases monotonically with the generated row number. That is
--- not a convenience for the seed, it is the property scenario 05 depends on:
--- BRIN is only useful when physical order correlates with the indexed value,
--- and an append-only log is the textbook case where it does.
--- --------------------------------------------------------------------------
-
+-- occurred_at increases monotonically with the generated row number. Not a
+-- convenience for the seed: it is the property scenario 05 depends on. BRIN is
+-- only useful when physical order correlates with the indexed value, and an
+-- append-only log is the textbook case where it does.
 INSERT INTO events (occurred_at, event_type, customer_id, payload)
 SELECT
     lab_epoch() - make_interval(secs => ((lab_n(300000) - g) * (63072000.0 / lab_n(300000)))::int),

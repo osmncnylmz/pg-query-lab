@@ -1,20 +1,14 @@
--- ---------------------------------------------------------------------------
--- pg-query-lab :: statistics
--- ---------------------------------------------------------------------------
--- Run after 02_seed.sql.
+-- Run after 02_seed.sql:  psql -f sql/03_statistics.sql
 --
--- Without this step the planner is working from hard-coded defaults, and every
--- "before/after" number in this repository would be measuring the absence of
--- statistics rather than the presence of an index. VACUUM additionally sets the
--- visibility map, without which an Index Only Scan still has to visit the heap
--- for every row and stops being "only".
+-- Skip it and the planner works from hard-coded defaults, at which point every
+-- before/after number in this repository is measuring the absence of statistics
+-- rather than the presence of an index. VACUUM also sets the visibility map,
+-- without which an Index Only Scan still visits the heap for every row and
+-- stops being "only".
 --
--- These statements cannot run inside a transaction block, so they live in their
--- own file: the TypeScript runner sends them one at a time, and psql does the
--- same because there is one statement per line.
---
---   psql -f sql/03_statistics.sql
--- ---------------------------------------------------------------------------
+-- VACUUM cannot run inside a transaction block, which is why these live in a
+-- file of their own. The TypeScript runner sends them one at a time; psql does
+-- the same because there is one statement per line.
 
 VACUUM (ANALYZE) customers;
 VACUUM (ANALYZE) addresses;

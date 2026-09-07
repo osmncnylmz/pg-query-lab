@@ -14,10 +14,10 @@ separate costs:
 1. **The expression runs per row.** Building a `tsvector` means concatenating,
    tokenising, stemming and stop-word filtering the text. Doing that 20,000
    times to answer one search is most of the runtime.
-2. **It cannot be indexed as written** -- not without an expression index that
+2. **It cannot be indexed as written.** Not without an expression index that
    repeats the expression exactly, character for character.
 
-## The fix, in two parts
+## The fix
 
 **A stored generated column** moves the work to write time:
 
@@ -47,7 +47,7 @@ CREATE INDEX products_search_gin ON products USING gin (search_vector);
 ## Why the two queries return identical rows
 
 The generated column's expression and the naive query's expression are the same
-text. That is not a coincidence to be maintained by hand -- it is why the
+text. That is not a coincidence to be maintained by hand; it is why the
 harness compares result sets on every run. Change one and the scenario fails
 rather than quietly reporting a speedup on a different question.
 
@@ -79,10 +79,9 @@ Bitmap Heap Scan on products
 ## Ranking
 
 Real search also ranks. `ts_rank_cd(search_vector, query)` is the usual next
-step, and it is worth knowing that ranking is *not* indexable: it has to read
-every matching row. That is fine when the index has already reduced the
-candidates from 20,000 to 40, and it is a trap if the query is broad enough to
-match a large fraction of the table.
+step, and ranking is *not* indexable: it reads every matching row. Fine when the
+index has already cut the candidates from 20,000 to 40. A trap when the query is
+broad enough to match a large slice of the table.
 
 ## Related
 

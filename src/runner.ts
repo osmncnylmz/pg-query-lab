@@ -46,10 +46,7 @@ function median(values: readonly number[]): number {
   return ((sorted[mid - 1] ?? 0) + upper) / 2;
 }
 
-/**
- * The value PGlite hands back for a column, narrowed to what can be re-rendered
- * as a SQL literal. Anything else is a scenario authoring mistake and says so.
- */
+/** Anything that cannot be re-rendered as a literal is a scenario authoring bug. */
 function asSqlValue(column: string, value: unknown): SqlValue {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
@@ -121,21 +118,7 @@ export class ScenarioError extends Error {
   }
 }
 
-/**
- * Run one scenario end to end and leave the database exactly as it was found.
- *
- * The ordering here is the whole point of the harness:
- *
- *   * an index-introduction scenario measures its naive query *before* the
- *     index exists, because measuring it afterwards would measure nothing;
- *   * a rewrite scenario applies its DDL to both sides, because otherwise the
- *     comparison is between an indexed query and an unindexed one, not between
- *     two ways of writing the same question;
- *   * everything created is dropped again, and the drop is verified against a
- *     snapshot of the database taken beforehand -- one scenario's leftover
- *     index silently improving the next scenario's "before" number is exactly
- *     the kind of quiet dishonesty this repository exists to argue against.
- */
+/** Run one scenario end to end and leave the database exactly as it was found. */
 export async function runScenario(lab: Lab, scenario: Scenario): Promise<ScenarioRun> {
   const before = await lab.snapshot();
 
@@ -165,11 +148,10 @@ async function teardown(lab: Lab, scenario: Scenario): Promise<void> {
 }
 
 /**
- * Compare the database against the snapshot taken before the scenario ran.
- *
  * One scenario's leftover index silently improving the next scenario's "before"
- * number is exactly the kind of quiet dishonesty this repository exists to
- * argue against, so the harness refuses to let it happen unnoticed.
+ * number is exactly the sort of quiet dishonesty this repository exists to
+ * argue against. So the snapshot taken before the run is compared against the
+ * one taken after teardown, and a mismatch fails the scenario.
  */
 async function assertNoDrift(
   lab: Lab,

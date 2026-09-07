@@ -14,10 +14,10 @@ This shape is easy to write and almost impossible to spot in review, because
 nothing about it looks like a loop. `EXPLAIN ANALYZE` gives it away: the
 `SubPlan` node reports `loops=` equal to the number of output rows.
 
-Note that this scenario adds no index and changes no schema. `orders` already
-has `(customer_id, placed_at DESC)`, so the naive query's subqueries are
-themselves index-driven -- they are as fast as a correlated subquery can be.
-The quadratic term is not an indexing problem and no index can remove it.
+This scenario adds no index and changes no schema. `orders` already has
+`(customer_id, placed_at DESC)`, so the naive query's subqueries are themselves
+index-driven; they are about as fast as a correlated subquery gets. The
+quadratic term is not an indexing problem and no index will remove it.
 
 ## The fix
 
@@ -67,8 +67,10 @@ WindowAgg
 
 Any `SubPlan` with a large `loops=` is worth a second look. It is the plan's way
 of saying "this ran once per row". Multiply `loops` by the rows each iteration
-produced -- 2161 x 237, twice -- and you have the real amount of work.
+produced (2161 x 237, twice) and you have the real amount of work.
 
-In `EXPLAIN (FORMAT JSON)` there is no node whose type is `SubPlan`; the
-subquery appears as a child plan whose `Parent Relationship` is `SubPlan`. That
-is what the test for this scenario asserts on.
+## Asserting on it
+
+`EXPLAIN (FORMAT JSON)` has no node whose type is `SubPlan`. The subquery turns
+up as a child plan whose `Parent Relationship` is `SubPlan`, and that is what
+this scenario's `meta.json` matches on.

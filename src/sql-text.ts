@@ -1,27 +1,24 @@
 /**
- * Minimal, correctness-focused SQL text handling.
+ * Two jobs, one scanner.
  *
- * Two jobs, one scanner:
+ * `renderSqlVariables` substitutes psql-style `:name` and `:'name'` variables,
+ * so the .sql files in this repository can be fed to psql and to the PGlite
+ * runner without maintaining two dialects. `splitStatements` cuts a script into
+ * statements, which VACUUM needs: it will not run inside the implicit
+ * transaction block a multi-statement simple query creates.
  *
- *   1. `renderSqlVariables` substitutes psql-style `:name` / `:'name'`
- *      variables, so the same .sql files can be fed to psql and to this
- *      repository's PGlite runner without maintaining two dialects.
- *   2. `splitStatements` splits a script into individual statements, needed
- *      because VACUUM refuses to run inside the implicit transaction block that
- *      a multi-statement simple query creates.
- *
- * Both need to know where they are in the text, so both are built on one
- * scanner that understands the lexical structures a naive regex gets wrong:
- * single-quoted strings (including `''` escapes and `E'\''` backslash escapes),
- * quoted identifiers, dollar-quoted bodies, `--` line comments and nestable
- * block comments. A regex-based substituter would happily rewrite `':session'`
- * inside a string literal, or `::text` into a cast of a variable named `text`.
+ * Both have to know where they are in the text, so both sit on one scanner that
+ * understands what a regex gets wrong -- single-quoted strings with their `''`
+ * and `E'\''` escapes, quoted identifiers, dollar-quoted bodies, `--` lines and
+ * nestable block comments. Substitute with a regex and `':session'` inside a
+ * string literal gets rewritten, or `::text` is read as a cast of a variable
+ * called `text`.
  */
 
 export type SqlValue = string | number | boolean | Date | null;
 
 interface Span {
-  /** Index just past the lexical structure that starts at the given offset. */
+  /** Index just past the structure that started at the offset scanned from. */
   end: number;
 }
 
@@ -29,10 +26,11 @@ const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
 
 /**
- * If a non-code lexical structure starts at `i`, return where it ends.
- * Otherwise return null. Never throws on malformed input: an unterminated
- * structure simply extends to the end of the text, which keeps the caller from
- * substituting inside what is obviously not code.
+ * If a non-code structure starts at `i`, return where it ends; otherwise null.
+ *
+ * Malformed input never throws. An unterminated structure just runs to the end
+ * of the text, which keeps the caller from substituting inside what is plainly
+ * not code.
  */
 function scanNonCode(sql: string, i: number): Span | null {
   const two = sql.slice(i, i + 2);
@@ -110,8 +108,8 @@ function scanNonCode(sql: string, i: number): Span | null {
   return null;
 }
 
-/** Render a JS value as a SQL literal. Deliberately narrow: anything the lab
- * cannot render unambiguously is a programming error, not a coercion. */
+/** Deliberately narrow: what cannot be rendered unambiguously is an error,
+ * not a coercion. */
 export function toSqlLiteral(value: SqlValue): string {
   if (value === null) return 'NULL';
   if (typeof value === 'boolean') return value ? 'true' : 'false';
@@ -203,7 +201,6 @@ export function renderSqlVariables(sql: string, vars: Readonly<Record<string, Sq
   return out;
 }
 
-/** Split a script into statements on top-level semicolons. */
 export function splitStatements(sql: string): string[] {
   const statements: string[] = [];
   let start = 0;
@@ -234,7 +231,8 @@ function stripComments(statement: string): string {
     const span = scanNonCode(statement, i);
     if (span) {
       const text = statement.slice(i, span.end);
-      // Keep strings and dollar-quoted bodies; drop comments.
+      // Strings and dollar-quoted bodies survive; a comment becomes a space, so
+      // that `a/**/b` does not collapse into `ab`.
       if (!text.startsWith('--') && !text.startsWith('/*')) out += text;
       else out += ' ';
       i = span.end;

@@ -1,4 +1,4 @@
--- Identical query. The partial index created by setup.sql is what changed.
+-- Same query. The partial index in setup.sql is the only difference.
 SELECT id, customer_id, placed_at, total_amount
 FROM orders
 WHERE status = 'pending'

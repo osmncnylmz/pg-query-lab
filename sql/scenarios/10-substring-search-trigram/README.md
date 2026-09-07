@@ -54,17 +54,18 @@ function and the `%` operator but cannot drive an ordered scan by distance.
 
 ## Trigrams or full-text search
 
-They solve different problems, and this repository demonstrates both -- see
-scenario 13 for full-text search on `products`.
+They solve different problems, and this repository demonstrates both; scenario
+13 does full-text search on `products`.
 
-* **Trigram** matches *characters*. It handles substrings, typos and
-  partial words, is language-agnostic, and does not know that "running" and
-  "ran" are related. Right for an admin lookup box, a SKU search, a fuzzy name
-  match.
-* **Full-text search** matches *words*, after stemming and stop-word removal. It
-  understands "waterproof jackets" should match "waterproof jacket", supports
-  ranking and phrase queries, and cannot find a substring in the middle of a
-  word. Right for searching prose.
+A trigram index matches *characters*. It handles substrings, typos and partial
+words, it is language-agnostic, and it has no idea that "running" and "ran" are
+related. That is what you want behind an admin lookup box, a SKU field, a fuzzy
+match on a customer name someone half remembers.
+
+Full-text search matches *words*, after stemming and stop-word removal, so
+"waterproof jackets" finds "waterproof jacket". It ranks, it does phrase
+queries, and it will never find a substring in the middle of a word. Use it on
+prose.
 
 ## What to look for in the plan
 
@@ -81,5 +82,6 @@ Bitmap Heap Scan on reviews  (rows=11, Recheck Cond: (body ~~* '%...%'))
   -> Bitmap Index Scan using reviews_body_trgm_idx
 ```
 
-The recheck is mandatory here, not incidental: trigram matching is approximate
-and can return rows whose trigrams all appear but not in the right order.
+The recheck is doing real work here. Trigram matching is approximate: the index
+can hand back rows in which every trigram of the pattern appears, but not in the
+order the pattern wanted.
