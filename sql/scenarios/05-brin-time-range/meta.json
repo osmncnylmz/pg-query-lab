@@ -1,0 +1,33 @@
+{
+  "title": "Time range on an append-only log",
+  "technique": "BRIN index",
+  "summary": "A one-week window over a two-year event log reads all 300k rows because nothing indexes occurred_at.",
+  "setup": "before-optimized",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "relation": "events"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Bitmap Index Scan",
+          "index": "events_occurred_at_brin"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "events"
+        }
+      ]
+    }
+  }
+}

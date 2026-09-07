@@ -1,0 +1,28 @@
+{
+  "title": "DISTINCT hiding a fan-out join",
+  "technique": "EXISTS semi-join",
+  "summary": "A join to a child table produces tens of thousands of duplicate wide rows, and DISTINCT throws almost all of them away.",
+  "setup": "before-both",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        "Aggregate"
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Nested Loop",
+          "joinType": "Semi"
+        }
+      ],
+      "forbidden": [
+        "Aggregate",
+        "Unique"
+      ]
+    }
+  }
+}

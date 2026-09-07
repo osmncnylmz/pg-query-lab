@@ -1,0 +1,36 @@
+{
+  "title": "Top-N per group over the whole table",
+  "technique": "LATERAL join",
+  "summary": "Ranking every order in the table to return the three most recent for a few hundred customers.",
+  "setup": "none",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        "WindowAgg",
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Index Scan",
+          "relation": "orders",
+          "index": "orders_customer_placed_idx"
+        },
+        "Limit"
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ]
+    }
+  }
+}

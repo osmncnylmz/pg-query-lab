@@ -1,0 +1,33 @@
+{
+  "title": "jsonb containment filter",
+  "technique": "GIN index with jsonb_path_ops",
+  "summary": "Filtering 300k event payloads by a jsonb key deserialises every document in the table.",
+  "setup": "before-optimized",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "relation": "events"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Bitmap Index Scan",
+          "index": "events_payload_gin"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "events"
+        }
+      ]
+    }
+  }
+}

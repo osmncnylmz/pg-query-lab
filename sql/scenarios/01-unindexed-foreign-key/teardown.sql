@@ -1,0 +1,1 @@
+DROP INDEX order_items_order_covering_idx;

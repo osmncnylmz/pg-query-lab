@@ -1,0 +1,34 @@
+{
+  "title": "Unindexed foreign key",
+  "technique": "Covering index with INCLUDE",
+  "summary": "order_items has a foreign key to orders but no index on it, so every lookup of one order's lines reads the whole child table.",
+  "setup": "before-optimized",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "relation": "order_items"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Index Only Scan",
+          "relation": "order_items",
+          "index": "order_items_order_covering_idx"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "order_items"
+        }
+      ]
+    }
+  }
+}

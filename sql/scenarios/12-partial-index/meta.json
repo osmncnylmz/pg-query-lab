@@ -1,0 +1,33 @@
+{
+  "title": "Selective predicate on a skewed column",
+  "technique": "Partial index",
+  "summary": "Two percent of orders are pending, but finding them reads all one hundred thousand.",
+  "setup": "before-optimized",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Bitmap Index Scan",
+          "index": "orders_pending_idx"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ]
+    }
+  }
+}

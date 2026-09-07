@@ -1,0 +1,33 @@
+{
+  "title": "Case-insensitive substring search",
+  "technique": "pg_trgm GIN index",
+  "summary": "ILIKE '%...%' cannot use a B-tree, so a product search across 50k review bodies reads all of them.",
+  "setup": "before-optimized",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "relation": "reviews"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Bitmap Index Scan",
+          "index": "reviews_body_trgm_idx"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "reviews"
+        }
+      ]
+    }
+  }
+}

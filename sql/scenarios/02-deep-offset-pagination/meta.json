@@ -1,0 +1,38 @@
+{
+  "title": "Deep OFFSET pagination",
+  "technique": "Keyset (seek) pagination",
+  "summary": "OFFSET 40000 makes the server produce and discard 40000 rows before returning the 25 anybody wanted.",
+  "setup": "before-both",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        "Limit",
+        {
+          "node": "Index Scan",
+          "relation": "orders",
+          "index": "orders_placed_at_id_idx"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        "Limit",
+        {
+          "node": "Index Scan",
+          "relation": "orders",
+          "index": "orders_placed_at_id_idx"
+        }
+      ],
+      "forbidden": [
+        "Sort",
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ]
+    }
+  }
+}

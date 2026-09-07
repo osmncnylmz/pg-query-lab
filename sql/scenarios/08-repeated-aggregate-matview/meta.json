@@ -1,0 +1,42 @@
+{
+  "title": "Repeated dashboard aggregate",
+  "technique": "Materialized view",
+  "summary": "A daily revenue rollup re-reads every order and every order line each time a dashboard is opened.",
+  "setup": "before-optimized",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        },
+        {
+          "node": "Seq Scan",
+          "relation": "order_items"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Index Scan",
+          "relation": "daily_revenue",
+          "index": "daily_revenue_day_uq"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        },
+        {
+          "node": "Seq Scan",
+          "relation": "order_items"
+        }
+      ]
+    }
+  }
+}

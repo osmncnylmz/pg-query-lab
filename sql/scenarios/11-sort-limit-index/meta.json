@@ -1,0 +1,36 @@
+{
+  "title": "Sort and limit over a large table",
+  "technique": "Index providing the ordering",
+  "summary": "A top-50 list sorts 100k rows because no index provides the requested ordering, including the tiebreaker's direction.",
+  "setup": "before-optimized",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        "Sort",
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Index Scan",
+          "relation": "orders",
+          "index": "orders_total_amount_idx"
+        }
+      ],
+      "forbidden": [
+        "Sort",
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ]
+    }
+  }
+}

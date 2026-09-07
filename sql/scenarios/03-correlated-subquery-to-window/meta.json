@@ -1,0 +1,28 @@
+{
+  "title": "Correlated subquery per row",
+  "technique": "Window function",
+  "summary": "Two correlated aggregates re-scan each customer's order history once per order, turning a linear job into a quadratic one.",
+  "setup": "none",
+  "iterations": 3,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "parentRelationship": "SubPlan"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        "WindowAgg"
+      ],
+      "forbidden": [
+        {
+          "parentRelationship": "SubPlan"
+        }
+      ]
+    }
+  }
+}

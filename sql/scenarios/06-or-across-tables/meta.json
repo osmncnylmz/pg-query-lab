@@ -1,0 +1,40 @@
+{
+  "title": "OR across two tables",
+  "technique": "UNION ALL rewrite",
+  "summary": "An OR whose arms live on different tables cannot be answered by either table's index, so the join has to be materialised in full.",
+  "setup": "before-both",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Bitmap Index Scan",
+          "index": "orders_status_idx"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        "Append",
+        {
+          "node": "Bitmap Index Scan",
+          "index": "orders_status_idx"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "orders"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "title": "Full-text search computed per row",
+  "technique": "Stored generated tsvector column with a GIN index",
+  "summary": "Building a tsvector for every product on every search means parsing the entire catalogue to answer one query.",
+  "setup": "before-optimized",
+  "iterations": 5,
+  "warmups": 1,
+  "orderedResults": true,
+  "expect": {
+    "naive": {
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "relation": "products"
+        }
+      ]
+    },
+    "optimized": {
+      "nodes": [
+        {
+          "node": "Bitmap Index Scan",
+          "index": "products_search_gin"
+        }
+      ],
+      "forbidden": [
+        {
+          "node": "Seq Scan",
+          "relation": "products"
+        }
+      ]
+    }
+  }
+}
